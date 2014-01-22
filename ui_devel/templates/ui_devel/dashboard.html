@@ -1,0 +1,172 @@
+<html>
+<head>
+    <title>UI Developer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            position:relative;
+        }
+        #dashboard {
+            height:48px;
+            border-bottom:1px solid black;
+            background: gray;
+        }
+        #iframe-container {
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 50px;
+            bottom: 0;
+        }
+        #iframe-container.mobile-portrait {
+            width: 320px;
+            height: 480px;
+            right: auto;
+            bottom: auto;
+        }
+        #iframe-container.mobile-landscape {
+            width: 480px;
+            height: 320px;
+            right: auto;
+            bottom: auto;
+        }
+        #iframe-container.small-tablet-portrait {
+            width: 600px;
+            height: 800px;
+            right: auto;
+            bottom: auto;
+        }
+        #iframe-container.small-tablet-landscape {
+            width: 800px;
+            height: 600px;
+            right: auto;
+            bottom: auto;
+        }
+        #iframe-container.tablet-portrait {
+            width: 768px;
+            height: 1024px;
+            right: auto;
+            bottom: auto;
+        }
+        #iframe-container.tablet-landscape {
+            width: 1024px;
+            height: 768px;
+            right: auto;
+            bottom: auto;
+        }
+        iframe {
+            width:100%;
+            height:100%;
+            border:none;
+        }
+    </style>
+</head>
+<body>
+    <div id="dashboard">
+        <select id="template-select"></select>
+        <select id="fixture-select"></select>
+        <select id="iframe-size-select">
+            <option value="window">Full window</option>
+            <option value="mobile-portrait">Mobile Portrait</option>
+            <option value="mobile-landscape">Mobile Landscape</option>
+            <option value="small-tablet-portrait">Small Tablet Portrait</option>
+            <option value="small-tablet-landscape">Small Tablet Landscape</option>
+            <option value="tablet-portrait">Tablet Portrait</option>
+            <option value="tablet-landscape">Tablet Landscape</option>
+        </select>
+    </div>
+
+    <div id="iframe-container" class="window">
+        <iframe id="template-frame"></iframe>
+    </div>
+
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js" ></script>
+    <script>
+        // create the drop downs inside the dashboard
+        var dashboard = $('#dashboard');
+        var template_select = $('#template-select');
+        var fixture_select =  $('#fixture-select');
+        var iframe_size_select = $('#iframe-size-select');
+        var iframe_container = $('#iframe-container');
+        var iframe = $('#template-frame');
+
+        // parse the data and populate the drop downs
+        var fixtures = jQuery.parseJSON('{{ fixtures_json|safe }}');
+        var template_name_tree = {};
+        var template_index = 0;
+        $.each(fixtures, function(template_name, template_obj) {
+            var fixture_names = [];
+            $.each(template_obj, function(fixture_name) {
+                fixture_names.push(fixture_name);
+            });
+            template_name_tree[template_name] = fixture_names;
+            template_select.append($('<option>',
+                                   {value: template_index})
+                                   .text(template_name));
+            ++template_index;
+        });
+
+        if (template_select.length > 0) {
+            // set the value of the template_select to the first element
+            template_select.val(0);
+            // manually trigger the selection
+            on_template_select();
+        }
+
+        template_select.change(on_template_select);
+        fixture_select.change(on_fixture_select);
+
+        function on_template_select(e) {
+            console.log('Selected');
+            // get the name of the selected template
+            var name = template_select.text();
+            console.log(name);
+            // clear fixture_select
+            fixture_select.html('');
+            // look up the fixture_names
+            var fixture_names = template_name_tree[name];
+            if (fixture_names) {
+                // add to fixture_select
+                $.each(fixture_names, function(fixture_index, fixture_name) {
+                    fixture_select.append($('<option>',
+                                          {value: fixture_index})
+                                          .text(fixture_name));
+                });
+                if (fixture_select.length > 0) {
+                    // set the value of fixture_select to the first element
+                    fixture_select.val(0);
+                    on_fixture_select();
+                }
+            }
+        }
+
+        function on_fixture_select(e) {
+            render_template();
+        }
+
+        function render_template() {
+            // get the name of the fixture and template
+            var fixture_name = fixture_select.children("option").filter(":selected").text();
+            var template_name = template_select.children("option").filter(":selected").text();
+            if (template_name && fixture_name) {
+                // render the template inside the iframe
+                // assemble the query string for the rendering URL
+                var query = '?template=' + encodeURIComponent(template_name) +
+                            '&fixture=' + encodeURIComponent(fixture_name);
+                var url = '{% url 'render-template' %}' + query;
+                $(iframe).attr('src', url);
+
+                document.title = 'UI Developer - ' + template_name + ' - ' + fixture_name;
+            }
+        }
+
+        iframe_size_select.change(function() {
+            // clear existing class
+            iframe_container.removeClass();
+            iframe_container.addClass(iframe_size_select.val());
+        });
+
+    </script>
+</body>
+</html>
