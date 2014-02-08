@@ -20,37 +20,37 @@
             bottom: 0;
         }
         #iframe-container.mobile-portrait {
-            width: 320px;
+            width: 335px;
             height: 480px;
             right: auto;
             bottom: auto;
         }
         #iframe-container.mobile-landscape {
-            width: 480px;
+            width: 495px;
             height: 320px;
             right: auto;
             bottom: auto;
         }
         #iframe-container.small-tablet-portrait {
-            width: 600px;
+            width: 615px;
             height: 800px;
             right: auto;
             bottom: auto;
         }
         #iframe-container.small-tablet-landscape {
-            width: 800px;
+            width: 815px;
             height: 600px;
             right: auto;
             bottom: auto;
         }
         #iframe-container.tablet-portrait {
-            width: 768px;
+            width: 783px;
             height: 1024px;
             right: auto;
             bottom: auto;
         }
         #iframe-container.tablet-landscape {
-            width: 1024px;
+            width: 1039px;
             height: 768px;
             right: auto;
             bottom: auto;
@@ -65,7 +65,9 @@
 <body>
     <div id="dashboard">
         <select id="template-select"></select>
+
         <select id="fixture-select"></select>
+
         <select id="iframe-size-select">
             <option value="window">Full window</option>
             <option value="mobile-portrait">Mobile Portrait</option>
@@ -75,6 +77,10 @@
             <option value="tablet-portrait">Tablet Portrait</option>
             <option value="tablet-landscape">Tablet Landscape</option>
         </select>
+
+        <label for="login">Logged In</label><input id="login" type="checkbox" />
+
+        <button id="reload">Reload Template</button>
     </div>
 
     <div id="iframe-container" class="window">
@@ -83,16 +89,40 @@
 
     <script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js" ></script>
     <script>
+        function parse_hash() {
+            var match,
+                pl     = /\+/g,  // Regex for replacing addition symbol with a space
+                search = /([^&=]+)=?([^&]*)/g,
+                decode = function (s) { return decodeURIComponent(s.replace(pl, " ")); },
+                query  = decodeURIComponent(window.location.hash).substr(1);
+
+            var hash_params = {};
+            while (match = search.exec(query)) {
+                hash_params[decode(match[1])] = decode(match[2]);
+            }
+            return hash_params;
+        }
+    </script>
+    <script>
         // create the drop downs inside the dashboard
         var dashboard = $('#dashboard');
         var template_select = $('#template-select');
         var fixture_select =  $('#fixture-select');
+        var logged_in_checkbox = $('#login');
         var iframe_size_select = $('#iframe-size-select');
         var iframe_container = $('#iframe-container');
         var iframe = $('#template-frame');
 
+        // parse and record the hash params
+        var hash_params = parse_hash();
+
+        if (hash_params['logged_in']) {
+            logged_in_checkbox.prop('checked', true);
+        }
+
         // parse the data and populate the drop downs
         var fixtures = jQuery.parseJSON('{{ fixtures_json|safe }}');
+        console.log('fixtures', fixtures);
         var template_name_tree = {};
         var template_index = 0;
         $.each(fixtures, function(template_name, template_obj) {
@@ -105,27 +135,42 @@
                                    {value: template_index})
                                    .text(template_name));
             ++template_index;
+            console.log(template_name_tree)
         });
 
         if (template_select.length > 0) {
-            // set the value of the template_select to the first element
-            template_select.val(0);
+            // check if the hash specifies what to display
+            if (hash_params['template']) {
+                template_select.val(hash_params['template']);
+            }
+            else {
+                // set the value of the template_select to the first element
+                template_select.val(0);
+            }
             // manually trigger the selection
             on_template_select();
         }
 
         template_select.change(on_template_select);
         fixture_select.change(on_fixture_select);
+        logged_in_checkbox.change(on_login_change);
+        iframe_size_select.change(on_size_select);
+
+        if (hash_params['size']) {
+            iframe_size_select.val(hash_params['size']);
+            on_size_select();
+        }
+
+        $('#reload').click(iframe_refresh);
 
         function on_template_select(e) {
-            console.log('Selected');
             // get the name of the selected template
-            var name = template_select.text();
-            console.log(name);
+            var name = template_select.children("option").filter(":selected").text();
             // clear fixture_select
             fixture_select.html('');
             // look up the fixture_names
             var fixture_names = template_name_tree[name];
+            console.log('lookup', template_name_tree, name, fixture_names)
             if (fixture_names) {
                 // add to fixture_select
                 $.each(fixture_names, function(fixture_index, fixture_name) {
@@ -134,14 +179,23 @@
                                           .text(fixture_name));
                 });
                 if (fixture_select.length > 0) {
-                    // set the value of fixture_select to the first element
-                    fixture_select.val(0);
+                    if (hash_params['fixture']) {
+                        fixture_select.val(hash_params['fixture']);
+                    }
+                    else {
+                        // set the value of fixture_select to the first element
+                        fixture_select.val(0);
+                    }
                     on_fixture_select();
                 }
             }
         }
 
         function on_fixture_select(e) {
+            render_template();
+        }
+
+        function on_login_change(e) {
             render_template();
         }
 
@@ -154,18 +208,39 @@
                 // assemble the query string for the rendering URL
                 var query = '?template=' + encodeURIComponent(template_name) +
                             '&fixture=' + encodeURIComponent(fixture_name);
-                var url = '{% url 'render-template' %}' + query;
+                if (logged_in_checkbox.prop('checked')) {
+                    query += '&logged_in=1'
+                }
+
+                var url = "{% url 'render-template' %}" + query;
+                console.log('query', query, 'url', url)
                 $(iframe).attr('src', url);
 
                 document.title = 'UI Developer - ' + template_name + ' - ' + fixture_name;
+                set_hash();
             }
         }
 
-        iframe_size_select.change(function() {
+        function set_hash() {
+            var query = 'template=' + encodeURIComponent(template_select.val()) +
+                        '&fixture=' + encodeURIComponent(fixture_select.val()) +
+                        '&size=' + encodeURIComponent(iframe_size_select.val());
+            if (logged_in_checkbox.prop('checked')) {
+                query += '&logged_in=1'
+            }
+            window.location.hash = query;
+        }
+
+        function on_size_select() {
             // clear existing class
             iframe_container.removeClass();
             iframe_container.addClass(iframe_size_select.val());
-        });
+            set_hash();
+        }
+
+        function iframe_refresh() {
+            iframe[0].contentWindow.location.reload(true);
+        }
 
     </script>
 </body>

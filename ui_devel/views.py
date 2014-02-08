@@ -15,6 +15,7 @@ from . import mock
 class FixtureForm(forms.Form):
     template = forms.CharField()
     fixture = forms.CharField()
+    logged_in = forms.BooleanField(required=False)
 
     def __init__(self, fixtures, *args, **kwargs):
         super(FixtureForm, self).__init__(*args, **kwargs)
@@ -38,6 +39,9 @@ class FixtureForm(forms.Form):
             self.context = template_entry[fixture]
         except KeyError:
             raise forms.ValidationError("Invalid fixture name")
+
+        self.is_logged_in = cleaned_data.get('logged_in', False)
+
         return cleaned_data
 
 def show_dashboard(request):
@@ -50,12 +54,44 @@ def show_dashboard(request):
 
     form = FixtureForm(fixtures)
 
+    fixtures_json = json.dumps(fixtures, cls=mock.UIMockEncoder)
+    #print fixtures, fixtures_json
+
     return render_to_response("ui_devel/dashboard.html",
                               {'form': form,
-                               'fixtures_json': json.dumps(fixtures,
-                                                 cls=mock.UIMockEncoder)},
+                               'fixtures_json':fixtures_json},
                               RequestContext(request))
 
+class DevelContext(object):
+    def __init__(self, request, context, is_authenticated):
+        self.request = request
+        self.context  = context
+        self.is_authenticated = is_authenticated
+
+    def __enter__(self):
+        # overrride the url tag to return "" always
+        self.old_render = URLNode.render
+        def new_render(cls, context):
+            """ Override existing url method to simply return ""
+            """
+            return ""
+        URLNode.render = new_render
+
+        # replace the request user with a mock user
+        self.old_user = getattr(self.request, 'user', None)
+
+        self.request.user = self.context.get('user')
+        if self.request.user is None:
+            self.request.user = mock.UIMock('User',
+                                get_full_name='Full Name')
+
+        self.request.user.is_authenticated = self.is_authenticated
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # revert request.user
+        self.request.user = self.old_user
+        # revert url tag functionality
+        URLNode.render = self.old_render
 
 def render_template(request):
     # get the dictionary of template fixtures
@@ -65,22 +101,16 @@ def render_template(request):
     if form.is_valid():
         # render the template
         context = form.context
-        # overrride the url tag to return "" always
-        old_render = URLNode.render
-        def new_render(cls, context):
-            """ Override existing url method to simply return ""
-            """
-            return ""
-        URLNode.render = new_render
-        rendered = render_to_string(form.cleaned_data['template'],
-                                  context,
-                                  RequestContext(request))
-        # revert url tag functionality
-        URLNode.render = old_render
+        print 'context', context
+
+        with DevelContext(request, context, form.is_logged_in):
+            rendered = render_to_string(form.cleaned_data['template'],
+                                    context,
+                                    RequestContext(request))
 
         return HttpResponse(rendered)
 
     else:
-        # render default template
+        # TODO render default template
         print form.errors
         pass

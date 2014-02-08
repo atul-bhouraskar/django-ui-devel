@@ -38,7 +38,8 @@ def get_template_fixtures():
                     raise InvalidTemplateFixture('%s.fixture should be a '
                                                  'dictionary' %
                                                  templatefixture_module)
-            except ImportError:
+            except ImportError as e:
+                #print app_module, e
                 continue
         template_fixtures = _template_fixtures
     return template_fixtures
