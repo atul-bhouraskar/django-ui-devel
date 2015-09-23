@@ -4,7 +4,7 @@ import urllib
 from django.template import RequestContext
 from django.http import HttpResponse
 from django.http import HttpResponseRedirect, HttpResponseNotFound, HttpResponseForbidden
-from django.shortcuts import render_to_response
+from django.shortcuts import render
 from django.template.loader import render_to_string
 from django.template.defaulttags import URLNode
 from django import forms
@@ -55,12 +55,10 @@ def show_dashboard(request):
     form = FixtureForm(fixtures)
 
     fixtures_json = json.dumps(fixtures, cls=mock.UIMockEncoder)
-    #print fixtures, fixtures_json
 
-    return render_to_response("ui_devel/dashboard.html",
-                              {'form': form,
-                               'fixtures_json':fixtures_json},
-                              RequestContext(request))
+    return render(request, "ui_devel/dashboard.html",
+                  {'form': form,
+                  'fixtures_json':fixtures_json})
 
 class DevelContext(object):
     def __init__(self, request, context, is_authenticated):
@@ -101,16 +99,14 @@ def render_template(request):
     if form.is_valid():
         # render the template
         context = form.context
-        print 'context', context
 
         with DevelContext(request, context, form.is_logged_in):
             rendered = render_to_string(form.cleaned_data['template'],
-                                    context,
-                                    RequestContext(request))
+                                        context,
+                                        RequestContext(request))
 
         return HttpResponse(rendered)
 
     else:
         # TODO render default template
-        print form.errors
         pass
