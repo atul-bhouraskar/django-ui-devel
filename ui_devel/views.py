@@ -1,9 +1,7 @@
 import json
-import urllib
 
 from django.template import RequestContext
 from django.http import HttpResponse
-from django.http import HttpResponseRedirect, HttpResponseNotFound, HttpResponseForbidden
 from django.shortcuts import render
 from django.template.loader import render_to_string
 from django.template.defaulttags import URLNode
@@ -12,21 +10,26 @@ from django import forms
 from . import discover
 from . import mock
 
+
 class FixtureForm(forms.Form):
     template = forms.CharField()
     fixture = forms.CharField()
     logged_in = forms.BooleanField(required=False)
 
-    def __init__(self, fixtures, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super(FixtureForm, self).__init__(*args, **kwargs)
-        self.fixtures = fixtures
+        self.fixtures = None
 
         self.context = None
+        self.is_logged_in = False
 
     def clean(self):
         cleaned_data = super(FixtureForm, self).clean()
         template = cleaned_data.get("template")
         fixture = cleaned_data.get("fixture")
+
+        # get the dictionary of template fixtures
+        self.fixtures = discover.get_template_fixtures()
 
         # check that the template is in fixtures
         try:
@@ -34,7 +37,7 @@ class FixtureForm(forms.Form):
         except KeyError:
             raise forms.ValidationError("Invalid template name")
 
-        #check that the fixture is in this template_entry
+        # check that the fixture is in this template_entry
         try:
             self.context = template_entry[fixture]
         except KeyError:
@@ -43,6 +46,7 @@ class FixtureForm(forms.Form):
         self.is_logged_in = cleaned_data.get('logged_in', False)
 
         return cleaned_data
+
 
 def show_dashboard(request):
     """
@@ -58,7 +62,8 @@ def show_dashboard(request):
 
     return render(request, "ui_devel/dashboard.html",
                   {'form': form,
-                  'fixtures_json':fixtures_json})
+                   'fixtures_json':fixtures_json})
+
 
 class DevelContext(object):
     def __init__(self, request, context, is_authenticated):
@@ -69,6 +74,7 @@ class DevelContext(object):
     def __enter__(self):
         # overrride the url tag to return "" always
         self.old_render = URLNode.render
+
         def new_render(cls, context):
             """ Override existing url method to simply return ""
             """
@@ -81,7 +87,7 @@ class DevelContext(object):
         self.request.user = self.context.get('user')
         if self.request.user is None:
             self.request.user = mock.UIMock('User',
-                                get_full_name='Full Name')
+                                            get_full_name='Full Name')
 
         self.request.user.is_authenticated = self.is_authenticated
 
@@ -91,11 +97,9 @@ class DevelContext(object):
         # revert url tag functionality
         URLNode.render = self.old_render
 
-def render_template(request):
-    # get the dictionary of template fixtures
-    fixtures = discover.get_template_fixtures()
 
-    form = FixtureForm(fixtures, request.GET)
+def render_template(request):
+    form = FixtureForm(request.GET)
     if form.is_valid():
         # render the template
         context = form.context

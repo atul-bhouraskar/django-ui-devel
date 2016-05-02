@@ -1,21 +1,29 @@
 from django.conf import settings
 from importlib import import_module
 
+
 class InvalidTemplateFixture(Exception):
     pass
 
 # holds all the fixtures
 template_fixtures = {}
 
-def get_template_fixtures():
+
+def get_template_fixtures(refresh=False):
     """
     Return the list of all available template fixtures.
 
     Caches the result for faster access.
 
     Code modified from django/template/base.py/get_templatetags_modules()
+    :param refresh: forces the fixtures to be re-loaded, normally cached values
+                    are used
     """
     global template_fixtures
+    if refresh:
+        # invalidate the cache
+        template_fixtures = {}
+
     if not template_fixtures:
         _template_fixtures = {}
         # Populate list once per process. Mutate the local list first, and
